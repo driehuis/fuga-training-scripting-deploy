@@ -13,7 +13,7 @@ _openstack() { set -e; echo "`date +%F-%T` openstack $@" >> $error_log; openstac
 
 ubuntu_uuid="`_openstack image list | grep -i "$match_image"| awk '{print $2; }'|head -n1`"
 [ -z "$ubuntu_uuid" ] && die "Could not find an image matching $match_image"
-serverlist="`_openstack server list | awk '{print $4; }' | grep ' scriptmaster' ||true`"
+serverlist="`_openstack server list | awk '{print $4; }'`"
 if [ "`echo \"$serverlist\" | grep -c '^scriptmaster'`" = "0" ]; then
     _openstack server create \
         --image $ubuntu_uuid \
