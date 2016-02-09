@@ -13,6 +13,7 @@ NOVA_API_VERSION = "2"
 # Regex to match the image we need
 ubuntu_image_match = r"ubuntu 14.04.3.*image"
 desired_flavor = "c1.micro"
+desired_keypair = "bert-driehuis-20110117"
 
 # Utility routines
 
@@ -46,13 +47,27 @@ def list_find_regex(list, regex_s):
     return None
 
 
+def list_find_free_ip(list):
+    for o in list:
+        if not o.ip is None and o.fixed_ip is None:
+            return o
+    return None
+
+
+def list_find_instance_id(list, id):
+    for o in list:
+        if not o.instance_id is None and o.instance_id == id:
+            return o
+    return None
+
+
 def wait_for_server_creation(nova, name):
     delay = 0.2
     while delay < 120.0:
         serverlist = nova.servers.list()
         server = list_find(serverlist, name)
         if not server is None and server.status == 'ACTIVE':
-            return
+            return server
         print "Waiting " + str(delay) + " seconds for " + name + " to become active"
         delay *= 1.5
         time.sleep(delay)
@@ -75,6 +90,9 @@ nova = client.Client(NOVA_API_VERSION, os_username, os_password,
 serverlist = nova.servers.list()
 imagelist = nova.images.list()
 flavorlist = nova.flavors.list()
+floatingiplist = nova.floating_ips.list()
+keypairlist = nova.keypairs.list()
+pp.pprint(floatingiplist[0])
 image = list_find_regex(imagelist, ubuntu_image_match)
 if image is None:
     die("Could not find an image matching " + ubuntu_image_match)
@@ -83,12 +101,27 @@ flavor = list_find(flavorlist, desired_flavor)
 if flavor is None:
     die("Could not find a flavor matching " + desired_flavor)
 #pp.pprint(flavor)
+keypair = list_find(keypairlist, desired_keypair)
+if keypair is None:
+    die("Could not find a keypair matching " + desired_keypair)
+pp.pprint(keypair)
 
 scriptmaster = list_find(serverlist, "scriptmaster")
 if scriptmaster is None:
     print("Creating server scriptmaster")
-    nova.servers.create("scriptmaster", image, flavor)
-    wait_for_server_creation(nova, "scriptmaster")
+    nova.servers.create("scriptmaster", image, flavor, key_name=keypair.name)
+    scriptmaster = wait_for_server_creation(nova, "scriptmaster")
+
+floating_ip = list_find_instance_id(floatingiplist, scriptmaster.id)
+if floating_ip is None:
+    free_ip = list_find_free_ip(floatingiplist)
+    if free_ip:
+        scriptmaster.add_floating_ip(free_ip)
+    else:
+        print "No free floating IP"
+else:
+    print "Ip address for scriptmaster is " + floating_ip.ip
+
 
 #pp.pprint(serverlist[0])
 #pp.pprint(scriptmaster)
